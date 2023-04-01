@@ -5,28 +5,28 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
 type Auth struct {
-	Ver      int    `json:"ver"`
-	Username string `json:"username"`
-	Userid   int    `json:"userid"`
-	authType string `json:"type"`
-	token    string `json:"token"`
+	Ver       int    `json:"ver"`
+	Username  string `json:"username"`
+	Userid    int    `json:"userid"`
+	AuthType  string `json:"type"`
+	Usertoken string `json:"token"`
 }
 
 var hmacSecret string = "5dd89def9f73d4b6d7e8ae874e61cbaa990dc6b436e4edcb5496e5d997ca8fc4"
 var tokenCheckServer string = "http://userauth/api/backend/checktoken"
 
-func (this *Auth) CheckToken(Authorization string) error {
+func (pAuth *Auth) CheckToken(Authorization string) error {
 
 	token, err := jwt.Parse(Authorization, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte(hmacSecret), nil
 	})
@@ -36,7 +36,7 @@ func (this *Auth) CheckToken(Authorization string) error {
 		if !ok {
 			return err
 		}
-		this.Ver = ver
+		pAuth.Ver = ver
 		if ver > 1 {
 			userName, ok := claims["username"].(string)
 			if !ok {
@@ -54,13 +54,13 @@ func (this *Auth) CheckToken(Authorization string) error {
 			if !ok {
 				return err
 			}
-			this.Username = userName
-			this.Userid = userId
-			this.authType = authType
-			this.token = authToken
+			pAuth.Username = userName
+			pAuth.Userid = userId
+			pAuth.AuthType = authType
+			pAuth.Usertoken = authToken
 		}
 
-		if this.authType == "userauth" {
+		if pAuth.AuthType == "userauth" {
 			type tokenCheckReq struct {
 				Username string `json:"username"`
 				Userid   int    `json:"userid"`
@@ -72,15 +72,15 @@ func (this *Auth) CheckToken(Authorization string) error {
 			}
 			dataAck := &tokenCheckAck{}
 			dataReq := &tokenCheckReq{
-				Username: this.Username,
-				Userid:   this.Userid,
-				Token:    this.token,
+				Username: pAuth.Username,
+				Userid:   pAuth.Userid,
+				Token:    pAuth.Usertoken,
 			}
 			client := &http.Client{}
 			bytesData, _ := json.Marshal(dataReq)
 			req, _ := http.NewRequest("POST", tokenCheckServer, bytes.NewReader(bytesData))
 			resp, _ := client.Do(req)
-			body, _ := ioutil.ReadAll(resp.Body)
+			body, _ := io.ReadAll(resp.Body)
 			if err := json.Unmarshal(body, dataAck); err != nil {
 				return err
 			}
