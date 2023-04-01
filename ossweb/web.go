@@ -3,14 +3,11 @@ package ossweb
 import (
 	b64 "encoding/base64"
 	"fmt"
-	"main/docs"
 	"net/http"
 	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	swaggerfiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 type webEngine struct {
@@ -35,10 +32,7 @@ func NewWebEngine() *webEngine {
 }
 
 func (web *webEngine) Run() {
-	docs.SwaggerInfo.BasePath = "/api"
-
 	r := gin.Default()
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -46,17 +40,17 @@ func (web *webEngine) Run() {
 		})
 	})
 
-	// @BasePath /api
+	//	@BasePath	/api
 
 	// ListDir godoc
-	// @Summary List the directory tree as root and path
-	// @Schemes
-	// @Description List the directory tree as root and path
-	// @Tags example
-	// @Accept json
-	// @Produce json
-	// @Success 200 {defaultAck} code==0
-	// @Router /api/list [post]
+	//	@Summary	List the directory tree as root and path
+	//	@Schemes
+	//	@Description	List the directory tree as root and path
+	//	@Tags			example
+	//	@Accept			json
+	//	@Produce		json
+	//	@Success		200	{defaultAck}	code==0
+	//	@Router			/api/list [post]
 	r.POST("/api/list", func(ctx *gin.Context) {
 		type listReq struct {
 			Path string `json:"path"`
