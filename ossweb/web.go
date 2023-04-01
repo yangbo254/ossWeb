@@ -1,14 +1,14 @@
-package main
+package ossweb
 
 import (
 	b64 "encoding/base64"
 	"fmt"
+	"main/docs"
 	"net/http"
 	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	docs "github.com/go-project-name/docs"
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )

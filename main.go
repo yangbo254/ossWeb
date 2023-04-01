@@ -1,6 +1,8 @@
 package main
 
+import "main/ossweb"
+
 func main() {
-	web := NewWebEngine()
+	web := ossweb.NewWebEngine()
 	web.Run()
 }
