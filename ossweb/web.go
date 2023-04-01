@@ -2,6 +2,7 @@ package ossweb
 
 import (
 	b64 "encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -20,18 +21,35 @@ type defaultAck struct {
 	Data    interface{} `json:"data"`
 }
 
-func NewWebEngine() *webEngine {
+func NewWebEngine() (*webEngine, error) {
 	web := &webEngine{}
-	ossClient, err := NewOssClient("oss-cn-chengdu.aliyuncs.com", "LTAI5tJe19tUJQjTJ6Ud7Y22", "B4pLUhHtLfSLn5Hm9JfHXkJU7OJyt5", "yjf-oms")
+	ossEndpoint, err := GetConfigValue("ossEndpoint")
+	if err != nil {
+		return nil, errors.New("not found oss endpoint info in config")
+	}
+	ossAccessKeyId, err := GetConfigValue("ossAccessKeyId")
+	if err != nil {
+		return nil, errors.New("not found oss accesskey id info in config")
+	}
+	ossAccessKeySecret, err := GetConfigValue("ossAccessKeySecret")
+	if err != nil {
+		return nil, errors.New("not found oss accesskey secret info in config")
+	}
+	ossBucket, err := GetConfigValue("ossBucket")
+	if err != nil {
+		return nil, errors.New("not found oss bucket info in config")
+	}
+
+	ossClient, err := NewOssClient(ossEndpoint.(string), ossAccessKeyId.(string), ossAccessKeySecret.(string), ossBucket.(string))
 	if err != nil {
 		fmt.Println(err)
-		return nil
+		return nil, err
 	}
 	web.oss = ossClient
-	return web
+	return web, nil
 }
 
-func (web *webEngine) Run() {
+func (web *webEngine) Run() error {
 	r := gin.Default()
 
 	r.GET("/ping", func(c *gin.Context) {
@@ -196,7 +214,12 @@ func (web *webEngine) Run() {
 
 	})
 
-	r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
+	apiPort, err := GetConfigValue("apiPort")
+	if err != nil {
+		return errors.New("not found apii port info in config")
+	}
+	r.Run(fmt.Sprintf("0.0.0.0:%v", apiPort.(int))) // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
+	return nil
 }
 
 func (web *webEngine) tokenAuth(c *gin.Context) (*Auth, error) {

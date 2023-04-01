@@ -19,15 +19,17 @@ type Auth struct {
 	Usertoken string `json:"token"`
 }
 
-var hmacSecret string = "5dd89def9f73d4b6d7e8ae874e61cbaa990dc6b436e4edcb5496e5d997ca8fc4"
-var tokenCheckServer string = "http://userauth/api/backend/checktoken"
-
 func (pAuth *Auth) CheckToken(Authorization string) error {
 
 	token, err := jwt.Parse(Authorization, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
+		value, err := GetConfigValue("jwtHmacSecret")
+		if err != nil {
+			return nil, fmt.Errorf("not found jwt info in config")
+		}
+		hmacSecret := value.(string)
 		return []byte(hmacSecret), nil
 	})
 
@@ -78,7 +80,11 @@ func (pAuth *Auth) CheckToken(Authorization string) error {
 			}
 			client := &http.Client{}
 			bytesData, _ := json.Marshal(dataReq)
-			req, _ := http.NewRequest("POST", tokenCheckServer, bytes.NewReader(bytesData))
+			value, err := GetConfigValue("tokenCheckServer")
+			if err != nil {
+				return errors.New("not found check server info in config")
+			}
+			req, _ := http.NewRequest("POST", value.(string), bytes.NewReader(bytesData))
 			resp, _ := client.Do(req)
 			body, _ := io.ReadAll(resp.Body)
 			if err := json.Unmarshal(body, dataAck); err != nil {
