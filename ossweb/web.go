@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
 )
 
 type webEngine struct {
@@ -77,6 +78,7 @@ func (web *webEngine) Run() error {
 
 		auth, err := web.tokenAuth(ctx)
 		if err != nil {
+			log.Error(err)
 			ctx.JSON(http.StatusUnauthorized, defaultAck{
 				Code:    1,
 				Message: err.Error(),
@@ -85,6 +87,7 @@ func (web *webEngine) Run() error {
 		}
 
 		if err := ctx.ShouldBindJSON(&req); err != nil {
+			log.Error(err)
 			ctx.JSON(http.StatusBadRequest, defaultAck{
 				Code:    2,
 				Message: "invalid json: " + err.Error(),
@@ -94,6 +97,7 @@ func (web *webEngine) Run() error {
 
 		list, err := web.oss.List(auth.Username, req.Path)
 		if err != nil {
+			log.Error(err)
 			ctx.JSON(http.StatusBadRequest, defaultAck{
 				Code:    3,
 				Message: err.Error(),
@@ -116,6 +120,7 @@ func (web *webEngine) Run() error {
 
 		auth, err := web.tokenAuth(ctx)
 		if err != nil {
+			log.Error(err)
 			ctx.JSON(http.StatusUnauthorized, defaultAck{
 				Code:    1,
 				Message: err.Error(),
@@ -124,6 +129,7 @@ func (web *webEngine) Run() error {
 		}
 
 		if err := ctx.ShouldBindJSON(&req); err != nil {
+			log.Error(err)
 			ctx.JSON(http.StatusBadRequest, defaultAck{
 				Code:    2,
 				Message: "invalid json: " + err.Error(),
@@ -133,6 +139,7 @@ func (web *webEngine) Run() error {
 
 		data, err := web.oss.Get(auth.Username, req.Path)
 		if err != nil {
+			log.Error(err)
 			ctx.JSON(http.StatusBadRequest, defaultAck{
 				Code:    3,
 				Message: err.Error(),
@@ -142,6 +149,7 @@ func (web *webEngine) Run() error {
 		var byteData []byte
 		_, err = data.Read(byteData)
 		if err != nil {
+			log.Error(err)
 			ctx.JSON(http.StatusBadRequest, defaultAck{
 				Code:    3,
 				Message: err.Error(),
@@ -160,6 +168,7 @@ func (web *webEngine) Run() error {
 	r.POST("/api/put", func(ctx *gin.Context) {
 		auth, err := web.tokenAuth(ctx)
 		if err != nil {
+			log.Error(err)
 			ctx.JSON(http.StatusUnauthorized, defaultAck{
 				Code:    1,
 				Message: err.Error(),
@@ -169,6 +178,7 @@ func (web *webEngine) Run() error {
 
 		file, err := ctx.FormFile("file")
 		if err != nil {
+			log.Error(err)
 			ctx.JSON(http.StatusBadRequest, defaultAck{
 				Code:    2,
 				Message: fmt.Sprintf("get data error %v", err),
@@ -176,6 +186,7 @@ func (web *webEngine) Run() error {
 			return
 		}
 		if file.Filename == "" {
+			log.Error(err)
 			ctx.JSON(http.StatusBadRequest, defaultAck{
 				Code:    2,
 				Message: err.Error(),
@@ -184,6 +195,7 @@ func (web *webEngine) Run() error {
 		}
 		paths := strings.Split(filepath.ToSlash(file.Filename), "/")
 		if paths[len(paths)-1] == "" {
+			log.Error(err)
 			ctx.JSON(http.StatusBadRequest, defaultAck{
 				Code:    2,
 				Message: err.Error(),
@@ -192,6 +204,7 @@ func (web *webEngine) Run() error {
 		}
 		src, err := file.Open()
 		if err != nil {
+			log.Error(err)
 			ctx.JSON(http.StatusBadRequest, defaultAck{
 				Code:    2,
 				Message: err.Error(),
@@ -201,6 +214,7 @@ func (web *webEngine) Run() error {
 		defer src.Close()
 		err = web.oss.Put(auth.Username, filepath.ToSlash(file.Filename), src)
 		if err != nil {
+			log.Error(err)
 			ctx.JSON(http.StatusUnprocessableEntity, defaultAck{
 				Code:    3,
 				Message: err.Error(),
@@ -216,7 +230,7 @@ func (web *webEngine) Run() error {
 
 	apiPort, err := GetConfigValue("apiPort")
 	if err != nil {
-		return errors.New("not found apii port info in config")
+		return errors.New("not found api port info in config")
 	}
 	r.Run(fmt.Sprintf("0.0.0.0:%v", apiPort.(int))) // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 	return nil
