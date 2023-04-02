@@ -1,0 +1,16 @@
+{
+	// jwt secret
+    "jwtHmacSecret": "1234567890abcdefg",
+    // token校验服务地址,用于内部快速校验用户正确性
+    "tokenCheckServer": "http://userauth/api/backend/checktoken",
+    // 阿里云OSS Endpoint地址
+    "ossEndpoint":"oss-cn-chengdu.aliyuncs.com",
+    // 阿里云OSS 访问KEYID
+    "ossAccessKeyId":"LTAabcd",
+    // 阿里云OSS key secret
+    "ossAccessKeySecret":"key secret",
+    // 阿里云OSS bucket
+    "ossBucket":"oss-web-demo",
+    // api服务listen端口号
+    "apiPort":8000
+}
