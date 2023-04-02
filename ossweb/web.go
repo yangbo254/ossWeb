@@ -17,7 +17,7 @@ type webEngine struct {
 }
 
 type defaultAck struct {
-	Code    int         `json:"code"`
+	Code    int32       `json:"code"`
 	Message string      `json:"message"`
 	Data    interface{} `json:"data"`
 }
@@ -80,7 +80,7 @@ func (web *webEngine) Run() error {
 		if err != nil {
 			log.Error(err)
 			ctx.JSON(http.StatusUnauthorized, defaultAck{
-				Code:    1,
+				Code:    int32(ERROR_UNAUTHORIZED),
 				Message: err.Error(),
 			})
 			return
@@ -89,7 +89,7 @@ func (web *webEngine) Run() error {
 		if err := ctx.ShouldBindJSON(&req); err != nil {
 			log.Error(err)
 			ctx.JSON(http.StatusBadRequest, defaultAck{
-				Code:    2,
+				Code:    int32(ERROR_BADARGS),
 				Message: "invalid json: " + err.Error(),
 			})
 			return
@@ -105,7 +105,7 @@ func (web *webEngine) Run() error {
 			return
 		}
 		ctx.JSON(http.StatusOK, defaultAck{
-			Code:    0,
+			Code:    int32(ERROR_SUCCESS),
 			Message: "success",
 			Data:    list,
 		})
@@ -122,7 +122,7 @@ func (web *webEngine) Run() error {
 		if err != nil {
 			log.Error(err)
 			ctx.JSON(http.StatusUnauthorized, defaultAck{
-				Code:    1,
+				Code:    int32(ERROR_UNAUTHORIZED),
 				Message: err.Error(),
 			})
 			return
@@ -131,7 +131,7 @@ func (web *webEngine) Run() error {
 		if err := ctx.ShouldBindJSON(&req); err != nil {
 			log.Error(err)
 			ctx.JSON(http.StatusBadRequest, defaultAck{
-				Code:    2,
+				Code:    int32(ERROR_BADARGS),
 				Message: "invalid json: " + err.Error(),
 			})
 			return
@@ -170,7 +170,7 @@ func (web *webEngine) Run() error {
 		if err != nil {
 			log.Error(err)
 			ctx.JSON(http.StatusUnauthorized, defaultAck{
-				Code:    1,
+				Code:    int32(ERROR_UNAUTHORIZED),
 				Message: err.Error(),
 			})
 			return
@@ -180,7 +180,7 @@ func (web *webEngine) Run() error {
 		if err != nil {
 			log.Error(err)
 			ctx.JSON(http.StatusBadRequest, defaultAck{
-				Code:    2,
+				Code:    int32(ERROR_BADARGS),
 				Message: fmt.Sprintf("get data error %v", err),
 			})
 			return
@@ -188,7 +188,7 @@ func (web *webEngine) Run() error {
 		if file.Filename == "" {
 			log.Error(err)
 			ctx.JSON(http.StatusBadRequest, defaultAck{
-				Code:    2,
+				Code:    int32(ERROR_BADARGS),
 				Message: err.Error(),
 			})
 			return
@@ -197,7 +197,7 @@ func (web *webEngine) Run() error {
 		if paths[len(paths)-1] == "" {
 			log.Error(err)
 			ctx.JSON(http.StatusBadRequest, defaultAck{
-				Code:    2,
+				Code:    int32(ERROR_BADARGS),
 				Message: err.Error(),
 			})
 			return
