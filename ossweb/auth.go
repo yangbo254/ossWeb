@@ -34,17 +34,17 @@ func (pAuth *Auth) CheckToken(Authorization string) error {
 	})
 
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		ver, ok := claims["ver"].(int)
+		ver, ok := claims["ver"].(float64)
 		if !ok {
 			return err
 		}
-		pAuth.Ver = ver
+		pAuth.Ver = int(ver)
 		if ver > 1 {
 			userName, ok := claims["username"].(string)
 			if !ok {
 				return err
 			}
-			userId, ok := claims["userid"].(int)
+			userId, ok := claims["userid"].(float64)
 			if !ok {
 				return err
 			}
@@ -57,7 +57,7 @@ func (pAuth *Auth) CheckToken(Authorization string) error {
 				return err
 			}
 			pAuth.Username = userName
-			pAuth.Userid = userId
+			pAuth.Userid = int(userId)
 			pAuth.AuthType = authType
 			pAuth.Usertoken = authToken
 		}

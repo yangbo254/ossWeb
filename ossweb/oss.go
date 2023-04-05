@@ -3,7 +3,9 @@ package ossweb
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -12,15 +14,34 @@ import (
 )
 
 type ossObjectNode struct {
-	Root         string
-	Path         string
-	Type         string
-	LastModified time.Time
-	FileSize     int64
+	Root         string    `json:"root"`
+	Path         string    `json:"path"`
+	Type         string    `json:"type"`
+	LastModified time.Time `json:"lastmodified"`
+	FileSize     int64     `json:"filesize"`
+	Filename     string    `json:"filename"`
+}
+
+type ossObjectNodes []*ossObjectNode
+
+func (e ossObjectNodes) Len() int {
+	return len(e)
+}
+func (e ossObjectNodes) Swap(i, j int) {
+	e[i], e[j] = e[j], e[i]
+}
+func (e ossObjectNodes) Less(i, j int) bool {
+	if e[i].Type == "dir" && e[j].Type != "dir" {
+		return true
+	}
+	if e[i].Type != "dir" && e[j].Type == "dir" {
+		return false
+	}
+	return e[i].Path < e[j].Path
 }
 
 type structOssListCache struct {
-	dir map[string][]ossObjectNode
+	dir map[string][]*ossObjectNode
 }
 
 type ossClient struct {
@@ -52,7 +73,7 @@ func NewOssClient(endpoint, accessKeyId, accessKeySecret, bucket string) (*ossCl
 	return cli, nil
 }
 
-func (cli *ossClient) List(Root, Path string) ([]ossObjectNode, error) {
+func (cli *ossClient) List(Root, Path string) ([]*ossObjectNode, error) {
 	flagUpdateDir := false
 
 	cli.locker.Lock()
@@ -70,6 +91,7 @@ func (cli *ossClient) List(Root, Path string) ([]ossObjectNode, error) {
 	}
 	if list, found := cli.ossListCache[Root]; found {
 		if nodeList, foundDir := list.dir[Path]; foundDir {
+			sort.Sort(ossObjectNodes(nodeList))
 			return nodeList, nil
 		}
 	}
@@ -82,18 +104,34 @@ func (cli *ossClient) Put(Root, Path string, FileData io.Reader) error {
 		fmt.Println("bucket error:", err)
 		return err
 	}
-	ossPath := filepath.ToSlash(filepath.Join("/"+Root, Path))
+	ossPath := filepath.ToSlash(filepath.Join(Root, Path))
 	return bucket.PutObject(ossPath, FileData)
 }
 
-func (cli *ossClient) Get(Root, Path string) (io.ReadCloser, error) {
+func (cli *ossClient) GetSignUrl(Root, Path string) (url string, err error) {
 	bucket, err := cli.Client.Bucket(cli.Bucket)
 	if err != nil {
 		fmt.Println("bucket error:", err)
-		return nil, err
+		return "", err
 	}
-	ossPath := filepath.ToSlash(filepath.Join("/"+Root, Path))
-	return bucket.GetObject(ossPath)
+	ossPath := filepath.ToSlash(filepath.Join(Root, Path))
+	url, err = bucket.SignURL(ossPath, oss.HTTPGet, 60)
+	return
+}
+
+func (cli *ossClient) Get(Root, Path string) (header http.Header, reader io.ReadCloser, err error) {
+	bucket, err := cli.Client.Bucket(cli.Bucket)
+	if err != nil {
+		fmt.Println("bucket error:", err)
+		return nil, nil, err
+	}
+	ossPath := filepath.ToSlash(filepath.Join(Root, Path))
+	header, err = bucket.GetObjectMeta(ossPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	reader, err = bucket.GetObject(ossPath)
+	return
 }
 
 func (cli *ossClient) updateDir() {
@@ -111,7 +149,7 @@ func (cli *ossClient) updateDir() {
 	for _, object := range lsRes.Objects {
 		fmt.Println("Objects:", object.Key)
 
-		node := ossObjectNode{}
+		node := &ossObjectNode{}
 		pathSplit := strings.Split(object.Key, "/")
 		if len(pathSplit) < 2 {
 			continue
@@ -121,27 +159,30 @@ func (cli *ossClient) updateDir() {
 
 		if _, found := ossListCache[node.Root]; !found {
 			list := structOssListCache{}
-			list.dir = make(map[string][]ossObjectNode)
+			list.dir = make(map[string][]*ossObjectNode)
 			ossListCache[node.Root] = list
 		}
 
-		node.Path = filepath.ToSlash(filepath.Join(pathSplit[1:]...))
+		node.Path = "/" + filepath.ToSlash(filepath.Join(pathSplit[1:]...))
 		node.FileSize = object.Size
 		node.LastModified = object.LastModified
-
+		node.Filename = filepath.Base(node.Path)
 		if pathSplit[len(pathSplit)-1] == "" {
 			node.Type = "dir"
 			// 如果是目录，则纳入上级目录的范畴
-			filePath := filepath.ToSlash(filepath.Join(pathSplit[1 : len(pathSplit)-2]...))
-			filePath = "/" + filePath
-			ossListCache[node.Root].dir[filePath] = append(ossListCache[node.Root].dir[filePath], node)
+			_filepath := ""
+			if len(pathSplit)-2 != 0 {
+				_filepath = filepath.ToSlash(filepath.Join(pathSplit[1 : len(pathSplit)-2]...))
+			}
+			_filepath = "/" + _filepath
+			ossListCache[node.Root].dir[_filepath] = append(ossListCache[node.Root].dir[_filepath], node)
 		} else {
 			node.Type = "file"
 			//如果是文件,分割路径和文件名称
-			filePath := filepath.ToSlash(filepath.Join(pathSplit[1 : len(pathSplit)-1]...))
-			filePath = "/" + filePath
+			_filepath := filepath.ToSlash(filepath.Join(pathSplit[1 : len(pathSplit)-1]...))
+			_filepath = "/" + _filepath
 			//fileName := pathSplit[len(pathSplit)-1]
-			ossListCache[node.Root].dir[filePath] = append(ossListCache[node.Root].dir[filePath], node)
+			ossListCache[node.Root].dir[_filepath] = append(ossListCache[node.Root].dir[_filepath], node)
 		}
 	}
 

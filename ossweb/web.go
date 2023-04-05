@@ -1,14 +1,17 @@
 package ossweb
 
 import (
-	b64 "encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -20,6 +23,7 @@ type defaultAck struct {
 	Code    int32       `json:"code"`
 	Message string      `json:"message"`
 	Data    interface{} `json:"data"`
+	Req     interface{} `json:"req"`
 }
 
 func NewWebEngine() (*webEngine, error) {
@@ -51,7 +55,14 @@ func NewWebEngine() (*webEngine, error) {
 }
 
 func (web *webEngine) Run() error {
+
 	r := gin.Default()
+	config := cors.Config{
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"authorization", "content-type"},
+	}
+	r.Use(cors.New(config))
 
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -82,6 +93,7 @@ func (web *webEngine) Run() error {
 			ctx.JSON(http.StatusUnauthorized, defaultAck{
 				Code:    int32(ERROR_UNAUTHORIZED),
 				Message: err.Error(),
+				Req:     req,
 			})
 			return
 		}
@@ -91,6 +103,7 @@ func (web *webEngine) Run() error {
 			ctx.JSON(http.StatusBadRequest, defaultAck{
 				Code:    int32(ERROR_BADARGS),
 				Message: "invalid json: " + err.Error(),
+				Req:     req,
 			})
 			return
 		}
@@ -101,6 +114,7 @@ func (web *webEngine) Run() error {
 			ctx.JSON(http.StatusBadRequest, defaultAck{
 				Code:    3,
 				Message: err.Error(),
+				Req:     req,
 			})
 			return
 		}
@@ -108,8 +122,53 @@ func (web *webEngine) Run() error {
 			Code:    int32(ERROR_SUCCESS),
 			Message: "success",
 			Data:    list,
+			Req:     req,
 		})
 
+	})
+
+	r.POST("/api/geturl", func(ctx *gin.Context) {
+		type listReq struct {
+			Path string `json:"path"`
+		}
+		var req listReq
+
+		auth, err := web.tokenAuth(ctx)
+		if err != nil {
+			log.Error(err)
+			ctx.JSON(http.StatusUnauthorized, defaultAck{
+				Code:    int32(ERROR_UNAUTHORIZED),
+				Message: err.Error(),
+				Req:     req,
+			})
+			return
+		}
+
+		if err := ctx.ShouldBindJSON(&req); err != nil {
+			log.Error(err)
+			ctx.JSON(http.StatusBadRequest, defaultAck{
+				Code:    int32(ERROR_BADARGS),
+				Message: "invalid json: " + err.Error(),
+				Req:     req,
+			})
+			return
+		}
+		url, err := web.oss.GetSignUrl(auth.Username, req.Path)
+		if err != nil {
+			log.Error(err)
+			ctx.JSON(http.StatusBadRequest, defaultAck{
+				Code:    5,
+				Message: "oss error: " + err.Error(),
+				Req:     req,
+			})
+			return
+		}
+		ctx.JSON(http.StatusOK, defaultAck{
+			Code:    0,
+			Message: "success",
+			Data:    url,
+			Req:     req,
+		})
 	})
 
 	r.POST("/api/get", func(ctx *gin.Context) {
@@ -124,6 +183,7 @@ func (web *webEngine) Run() error {
 			ctx.JSON(http.StatusUnauthorized, defaultAck{
 				Code:    int32(ERROR_UNAUTHORIZED),
 				Message: err.Error(),
+				Req:     req,
 			})
 			return
 		}
@@ -133,35 +193,47 @@ func (web *webEngine) Run() error {
 			ctx.JSON(http.StatusBadRequest, defaultAck{
 				Code:    int32(ERROR_BADARGS),
 				Message: "invalid json: " + err.Error(),
+				Req:     req,
 			})
 			return
 		}
 
-		data, err := web.oss.Get(auth.Username, req.Path)
+		header, data, err := web.oss.Get(auth.Username, req.Path)
 		if err != nil {
 			log.Error(err)
 			ctx.JSON(http.StatusBadRequest, defaultAck{
 				Code:    3,
 				Message: err.Error(),
-			})
-			return
-		}
-		var byteData []byte
-		_, err = data.Read(byteData)
-		if err != nil {
-			log.Error(err)
-			ctx.JSON(http.StatusBadRequest, defaultAck{
-				Code:    3,
-				Message: err.Error(),
+				Req:     req,
 			})
 			return
 		}
 
-		ctx.JSON(http.StatusOK, defaultAck{
-			Code:    0,
-			Message: "success",
-			Data:    b64.StdEncoding.EncodeToString(byteData),
-		})
+		// 两种下载方案
+		if true {
+			contentLength, err := strconv.ParseInt(header.Get("ContentLength"), 10, 64)
+			if err != nil {
+				panic(err)
+			}
+			contentType := header.Get("Content-Type")
+			extraHeaders := map[string]string{
+				"Content-Disposition": `attachment;"`,
+			}
+			ctx.DataFromReader(http.StatusOK, contentLength, contentType, data, extraHeaders)
+		} else {
+			var byteData []byte
+			byteData, err = io.ReadAll(data)
+			if err != nil {
+				log.Error(err)
+				ctx.JSON(http.StatusBadRequest, defaultAck{
+					Code:    3,
+					Message: err.Error(),
+					Req:     req,
+				})
+				return
+			}
+			ctx.Data(200, "application/octet-stream", byteData)
+		}
 
 	})
 
@@ -232,7 +304,7 @@ func (web *webEngine) Run() error {
 	if err != nil {
 		return errors.New("not found api port info in config")
 	}
-	r.Run(fmt.Sprintf("0.0.0.0:%v", apiPort.(int))) // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
+	r.Run(fmt.Sprintf("0.0.0.0:%v", apiPort)) // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 	return nil
 }
 
